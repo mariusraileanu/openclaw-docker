@@ -41,6 +41,8 @@ for line in lines:
     if line.startswith("OPENCLAW_GATEWAY_AUTH_TOKEN="):
         out.append(f"OPENCLAW_GATEWAY_AUTH_TOKEN={token}")
         found = True
+    elif line.startswith("OPENCLAW_GATEWAY_TOKEN="):
+        out.append(f"OPENCLAW_GATEWAY_TOKEN={token}")
     else:
         out.append(line)
 

@@ -55,6 +55,14 @@ for key in OPENCLAW_GATEWAY_AUTH_TOKEN COMPASS_API_KEY TELEGRAM_BOT_TOKEN OPENCL
   fi
 done
 
+legacy_gateway_token="$(get_var OPENCLAW_GATEWAY_TOKEN)"
+auth_gateway_token="$(get_var OPENCLAW_GATEWAY_AUTH_TOKEN)"
+if [[ -n "$legacy_gateway_token" && -n "$auth_gateway_token" && "$legacy_gateway_token" != "$auth_gateway_token" ]]; then
+  echo "Error: OPENCLAW_GATEWAY_TOKEN and OPENCLAW_GATEWAY_AUTH_TOKEN differ." >&2
+  echo "Set OPENCLAW_GATEWAY_TOKEN to match, or remove OPENCLAW_GATEWAY_TOKEN entirely." >&2
+  errors=1
+fi
+
 if [[ "$errors" -ne 0 ]]; then
   exit 1
 fi
