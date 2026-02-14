@@ -11,7 +11,7 @@ SKILL_DIR="${OPENCLAW_STATE_DIR}/${SKILLS_DIR_NAME}/${SKILL_NAME}"
 
 if [[ ! -f "${SKILL_DIR}/SKILL.md" ]]; then
   if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
-    docker exec "${CONTAINER_NAME}" sh -lc "npx -y 'clawhub@${CLAWHUB_VERSION}' install --workdir /home/node/.openclaw --dir '${SKILLS_DIR_NAME}' --force '${SKILL_NAME}'"
+    docker exec "${CONTAINER_NAME}" sh -lc "mkdir -p /home/node/.openclaw/cache/npm && NPM_CONFIG_CACHE=/home/node/.openclaw/cache/npm XDG_CACHE_HOME=/home/node/.openclaw/cache npx -y 'clawhub@${CLAWHUB_VERSION}' install --workdir /home/node/.openclaw --dir '${SKILLS_DIR_NAME}' --force '${SKILL_NAME}'"
   else
     npx -y "clawhub@${CLAWHUB_VERSION}" install --workdir "${OPENCLAW_STATE_DIR}" --dir "${SKILLS_DIR_NAME}" --force "${SKILL_NAME}"
   fi
