@@ -215,6 +215,13 @@ if [[ "$DEPLOY_MODE" == "update" ]]; then
   echo "Bootstrap verified: /opt/openclaw-docker populated."
 
   if [[ "$PRIVATE_MODE" == "0" ]]; then
+    echo "Ensuring inbound NSG allows SSH (port 22)..."
+    az vm open-port \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$VM_NAME" \
+      --port 22 \
+      --priority 1001 \
+      --output none || true
     PUBLIC_IP="$(az vm show -d -g "$RESOURCE_GROUP" -n "$VM_NAME" --query publicIps -o tsv)"
   fi
 
