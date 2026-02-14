@@ -31,6 +31,10 @@ for file in "${required_files[@]}"; do
     echo "Error: missing file '${HOST_CLIPPY_DIR}/${file}'." >&2
     exit 1
   fi
+  if [[ ! -s "${HOST_CLIPPY_DIR}/${file}" ]]; then
+    echo "Error: empty file '${HOST_CLIPPY_DIR}/${file}'." >&2
+    exit 1
+  fi
 done
 
 ensure_dir_secure "${DEST_CLIPPY_DIR}"
@@ -72,16 +76,11 @@ fi
 echo "Synced Clippy auth files to host mount: ${DEST_CLIPPY_DIR}"
 
 if command -v docker >/dev/null 2>&1 && container_running "${CONTAINER_NAME}"; then
+  # data/clippy is bind-mounted into the container at CONTAINER_CLIPPY_DIR.
+  # Never remove/copy files from inside the container here; that can delete host files.
+  docker exec "${CONTAINER_NAME}" sh -lc "mkdir -p '${CONTAINER_CLIPPY_DIR}' && chmod 700 '${CONTAINER_CLIPPY_DIR}'"
   if [[ "$same_dir" == "1" ]]; then
-    docker exec "${CONTAINER_NAME}" sh -lc "mkdir -p '${CONTAINER_CLIPPY_DIR}' && chmod 700 '${CONTAINER_CLIPPY_DIR}'"
     echo "Clippy source and destination are the same path; using mounted files directly."
-  else
-    docker exec "${CONTAINER_NAME}" sh -lc "mkdir -p '${CONTAINER_CLIPPY_DIR}' && chmod 700 '${CONTAINER_CLIPPY_DIR}'"
-    cat "${DEST_CLIPPY_DIR}/config.json" | docker exec -i "${CONTAINER_NAME}" sh -lc "umask 077; cat > '${CONTAINER_CLIPPY_DIR}/config.json'"
-    cat "${DEST_CLIPPY_DIR}/token-cache.json" | docker exec -i "${CONTAINER_NAME}" sh -lc "umask 077; cat > '${CONTAINER_CLIPPY_DIR}/token-cache.json'"
-    if [[ -f "${DEST_CLIPPY_DIR}/storage-state.json" ]]; then
-      cat "${DEST_CLIPPY_DIR}/storage-state.json" | docker exec -i "${CONTAINER_NAME}" sh -lc "umask 077; cat > '${CONTAINER_CLIPPY_DIR}/storage-state.json'"
-    fi
   fi
   echo "Synced Clippy auth files to running container: ${CONTAINER_NAME}:${CONTAINER_CLIPPY_DIR}"
 fi

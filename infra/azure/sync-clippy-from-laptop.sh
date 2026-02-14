@@ -55,6 +55,10 @@ for f in config.json token-cache.json; do
     echo "Error: missing local file: ${SOURCE_DIR}/${f}" >&2
     exit 1
   fi
+  if [[ ! -s "${SOURCE_DIR}/${f}" ]]; then
+    echo "Error: local file is empty: ${SOURCE_DIR}/${f}" >&2
+    exit 1
+  fi
 done
 
 REMOTE="${USER_NAME}@${HOST}"
@@ -77,12 +81,13 @@ fi
 echo "[4/4] Securing files and syncing into container..."
 ssh -o StrictHostKeyChecking=accept-new "$REMOTE" "bash -lc '
   set -euo pipefail
-  test -f \"${REMOTE_DIR}/config.json\"
-  test -f \"${REMOTE_DIR}/token-cache.json\"
-  cd \"${REMOTE_REPO}\"
+  test -s \"${REMOTE_DIR}/config.json\"
+  test -s \"${REMOTE_DIR}/token-cache.json\"
   chmod 600 \"${REMOTE_DIR}\"/*.json 2>/dev/null || true
   chown ${USER_NAME}:${USER_NAME} \"${REMOTE_DIR}\"/*.json 2>/dev/null || true
-  bin/openclawctl auth-clippy \"${CONTAINER_NAME}\" \"${REMOTE_DIR}\" \"${REMOTE_DIR}\"
+  if docker ps --format \"{{.Names}}\" | grep -qx \"${CONTAINER_NAME}\"; then
+    docker exec \"${CONTAINER_NAME}\" sh -lc \"test -s /home/node/.config/clippy/config.json && test -s /home/node/.config/clippy/token-cache.json\"
+  fi
 '"
 
 echo "Done. Verify with:"
