@@ -1,4 +1,5 @@
 .env
+.env.azure
 .env.bak.*
 
 # Runtime state (contains secrets/tokens/local history)

@@ -79,6 +79,40 @@ Cloud-init option:
 - Use `infra/azure/cloud-init.yaml` as custom data when creating the VM.
 - Update `REPO_URL` in the file (or export it in cloud-init env) before use.
 
+One-command Azure deploy script:
+```bash
+cp .env.azure.example .env.azure
+# fill .env.azure once
+
+infra/azure/deploy-azure.sh \
+  --resource-group <rg> \
+  --vm-name <vm-name> \
+  --location uaenorth
+```
+
+The script auto-loads `.env.azure` if present, and CLI flags override file values.
+
+Private mode (no public IP, no inbound NSG rules):
+```bash
+infra/azure/deploy-azure.sh \
+  --resource-group <rg> \
+  --vm-name <vm-name> \
+  --private
+```
+
+Notes:
+- `--copy-env` is intentionally blocked in `--private` mode.
+- Use Bastion/VPN/jumpbox for VM access in private mode.
+
+To also copy local `.env` and run remote build+provision:
+```bash
+infra/azure/deploy-azure.sh \
+  --resource-group <rg> \
+  --vm-name <vm-name> \
+  --location uaenorth \
+  --copy-env
+```
+
 Persistence:
 - `data/.openclaw` -> OpenClaw state, config, cron jobs
 - `data/workspace` -> agent workspace
