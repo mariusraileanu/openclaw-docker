@@ -120,6 +120,7 @@ fi
 "${SCRIPTS_DIR}/check/validate-env.sh" "$ENV_FILE"
 
 mkdir -p ./data/.openclaw/workspace-cron ./data/.openclaw/agents/cron/agent ./data/.openclaw/agents/main/sessions
+"${SCRIPTS_DIR}/workspace/sync-workspace.sh" "./data/workspace"
 "${SCRIPTS_DIR}/cron/sync-workspace.sh" "./data/.openclaw/workspace-cron"
 
 OPENCLAW_PROFILE="${OPENCLAW_PROFILE:-secure}"

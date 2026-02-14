@@ -34,6 +34,7 @@ Detailed old->new mapping: `SCRIPT_MIGRATION.md`.
 │   ├── skills/    # skill installers/syncers
 │   └── lib/       # shared shell helpers
 ├── data/          # runtime state (host-mounted persistence)
+├── templates/     # tracked workspace markdown templates (main + cron)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── openclaw.json.example
@@ -164,7 +165,8 @@ bin/openclawctl azure-update --resource-group <rg> --vm-name <vm-name>
 
 Persistence:
 - `data/.openclaw` -> OpenClaw state, config, cron jobs
-- `data/workspace` -> agent workspace
+- `data/workspace` -> agent workspace (synced from `templates/workspace`)
+- `data/.openclaw/workspace-cron` -> cron workspace (synced from `templates/workspace-cron`)
 - `data/clippy` -> Clippy auth cache
 - `data/whoop` -> WHOOP auth files
 
@@ -178,7 +180,6 @@ Expose safely:
 - `cap_drop: [ALL]`
 - `no-new-privileges:true`
 - Read-only root filesystem by default (`OPENCLAW_READ_ONLY_ROOTFS=true`)
-- Runtime config mount is read-only in container
 - Secrets expected via `.env`; placeholders enforced in runtime config
 
 See `SECURITY_RUNBOOK.md` for rotation and break-glass policy.
