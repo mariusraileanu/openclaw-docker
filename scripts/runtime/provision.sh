@@ -85,10 +85,20 @@ PY
 ENV_FILE="${4:-.env}"
 
 if [[ -f "$ENV_FILE" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
+  while IFS='=' read -r key raw || [[ -n "${key:-}" ]]; do
+    [[ -z "${key:-}" ]] && continue
+    [[ "${key}" =~ ^[[:space:]]*# ]] && continue
+    if [[ ! "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      continue
+    fi
+    value="${raw:-}"
+    value="${value%$'\r'}"
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    export "${key}=${value}"
+  done < "$ENV_FILE"
 fi
 
 "${SCRIPTS_DIR}/check/validate-env.sh" "$ENV_FILE"
