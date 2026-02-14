@@ -19,30 +19,13 @@ fi
 
 JOBS_FILE_ABS="$(cd "$(dirname "$JOBS_FILE")" && pwd)/$(basename "$JOBS_FILE")"
 
-JOBS_FILE="$JOBS_FILE_ABS" OWNER_NAME="$OWNER_NAME" LOCAL_TZ="$LOCAL_TZ" CITY="$CITY" TELEGRAM_TARGET="$TELEGRAM_TARGET" node <<'EOF'
-const fs = require("fs");
-
-const jobsPath = process.env.JOBS_FILE;
-const ownerName = process.env.OWNER_NAME || "User";
-const localTz = process.env.LOCAL_TZ || "UTC";
-const city = process.env.CITY || "your city";
-const telegramTarget = process.env.TELEGRAM_TARGET || "";
-const raw = fs.readFileSync(jobsPath, "utf8");
-const doc = JSON.parse(raw);
-
-if (!Array.isArray(doc.jobs)) {
-  doc.jobs = [];
-}
-
-const now = Date.now();
-const jobId = "7025fca3-12a3-42e2-b586-38fadc60b764";
-
-const message = `You are Jarvis preparing the daily 08:00 briefing.
+read -r -d '' MESSAGE_TEMPLATE <<'EOF' || true
+You are Jarvis preparing the daily 08:00 briefing.
 You are executing the "Morning Brief" task using OpenClaw.
 
-Audience: ${ownerName}.
-Time zone: ${localTz}. Render ALL times in ${localTz}.
-Date anchor: "today" in ${localTz}.
+Audience: __OWNER_NAME__.
+Time zone: __LOCAL_TZ__. Render ALL times in __LOCAL_TZ__.
+Date anchor: "today" in __LOCAL_TZ__.
 
 Goal:
 Send one high-signal morning briefing message to Telegram in this exact section order:
@@ -95,7 +78,7 @@ Content requirements:
 - Today:
   - Source meetings ONLY from oc_calendar_today_json.stdout output.
   - Include ALL meetings in the same order and keep titles faithful.
-  - Include weather line for ${city}.
+  - Include weather line for __CITY__.
   - Add move-suggestion lines only if conflict/overload exists.
   - If conflict is high-impact or ambiguous, add:
     "Approval needed: Should I suggest rescheduling <meeting>?"
@@ -112,7 +95,7 @@ Content requirements:
 Delivery rules:
 - You MUST call message tool exactly once:
   - channel: telegram
-  - target: ${telegramTarget}
+  - target: __TELEGRAM_TARGET__
   - text: telegramMessage
 - Do NOT send confirmation/follow-up messages.
 - Do NOT send any second message.
@@ -126,46 +109,72 @@ Output contract:
 - telegramMessage must equal the exact sent message body you sent via message tool.
 - After calling message tool, the final assistant output MUST be only the JSON object above.
 - Never output confirmation phrases like "sent", "delivered", or "successfully sent".
-- No markdown fences, no meta commentary.`;
+- No markdown fences, no meta commentary.
+EOF
 
-const existingIdx = doc.jobs.findIndex((j) => j && j.id === jobId);
-const previous = existingIdx >= 0 ? doc.jobs[existingIdx] : null;
-const createdAtMs = previous?.createdAtMs ?? now;
+MESSAGE="${MESSAGE_TEMPLATE//__OWNER_NAME__/$OWNER_NAME}"
+MESSAGE="${MESSAGE//__LOCAL_TZ__/$LOCAL_TZ}"
+MESSAGE="${MESSAGE//__CITY__/$CITY}"
+MESSAGE="${MESSAGE//__TELEGRAM_TARGET__/$TELEGRAM_TARGET}"
 
-const job = {
-  id: jobId,
-  name: "Morning Brief 08:00",
-  description: "Daily 08:00 briefing with WHOOP-first summary, calendar optimization, emails, weather, and news.",
-  enabled: true,
-  createdAtMs,
-  updatedAtMs: now,
-  schedule: {
-    kind: "cron",
-    expr: "0 8 * * *",
-    tz: localTz,
-  },
-  sessionTarget: "isolated",
-  wakeMode: "now",
-  payload: {
-    kind: "agentTurn",
-    message,
-    model: "compass/gpt-4o",
-  },
-  delivery: {
-    mode: "none",
-    channel: "last",
-  },
-  state: previous?.state ?? {},
-  agentId: "cron",
-};
+JOBS_FILE="$JOBS_FILE_ABS" LOCAL_TZ="$LOCAL_TZ" MESSAGE="$MESSAGE" python3 <<'PY'
+import json
+import os
+import time
 
-if (existingIdx >= 0) {
-  doc.jobs[existingIdx] = { ...previous, ...job };
-} else {
-  doc.jobs.push(job);
+jobs_path = os.environ["JOBS_FILE"]
+local_tz = os.environ.get("LOCAL_TZ", "UTC")
+message = os.environ["MESSAGE"]
+job_id = "7025fca3-12a3-42e2-b586-38fadc60b764"
+
+with open(jobs_path, "r", encoding="utf-8") as f:
+    doc = json.load(f)
+
+if not isinstance(doc.get("jobs"), list):
+    doc["jobs"] = []
+
+now = int(time.time() * 1000)
+existing_idx = next((i for i, j in enumerate(doc["jobs"]) if isinstance(j, dict) and j.get("id") == job_id), -1)
+previous = doc["jobs"][existing_idx] if existing_idx >= 0 else None
+created_at_ms = previous.get("createdAtMs", now) if isinstance(previous, dict) else now
+
+job = {
+    "id": job_id,
+    "name": "Morning Brief 08:00",
+    "description": "Daily 08:00 briefing with WHOOP-first summary, calendar optimization, emails, weather, and news.",
+    "enabled": True,
+    "createdAtMs": created_at_ms,
+    "updatedAtMs": now,
+    "schedule": {
+        "kind": "cron",
+        "expr": "0 8 * * *",
+        "tz": local_tz,
+    },
+    "sessionTarget": "isolated",
+    "wakeMode": "now",
+    "payload": {
+        "kind": "agentTurn",
+        "message": message,
+        "model": "compass/gpt-4o",
+    },
+    "delivery": {
+        "mode": "none",
+        "channel": "last",
+    },
+    "state": previous.get("state", {}) if isinstance(previous, dict) else {},
+    "agentId": "cron",
 }
 
-fs.writeFileSync(jobsPath, JSON.stringify(doc, null, 2) + "\n");
-EOF
+if existing_idx >= 0:
+    merged = dict(previous) if isinstance(previous, dict) else {}
+    merged.update(job)
+    doc["jobs"][existing_idx] = merged
+else:
+    doc["jobs"].append(job)
+
+with open(jobs_path, "w", encoding="utf-8") as f:
+    json.dump(doc, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+PY
 
 echo "Morning briefing cron job synced in: ${JOBS_FILE}"

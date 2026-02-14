@@ -16,7 +16,6 @@ need_cmd() {
 
 need_cmd docker
 need_cmd python3
-need_cmd node
 
 if ! docker compose version >/dev/null 2>&1; then
   echo "Missing Docker Compose v2 (docker compose ...)." >&2

@@ -58,13 +58,18 @@ ensure_dir_secure "$DEST_WHOOP_DIR"
 # If redirect URI is not explicitly provided, preserve previously stored value if available.
 if [[ -z "$redirect_uri" && -f "${DEST_WHOOP_DIR}/token.json" ]]; then
   redirect_uri="$(
-    node -e '
-      const fs = require("fs");
-      try {
-        const t = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-        process.stdout.write(typeof t.redirect_uri === "string" ? t.redirect_uri : "");
-      } catch { process.stdout.write(""); }
-    ' "${DEST_WHOOP_DIR}/token.json"
+    python3 - "${DEST_WHOOP_DIR}/token.json" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        token = json.load(f)
+    v = token.get("redirect_uri")
+    print(v if isinstance(v, str) else "", end="")
+except Exception:
+    print("", end="")
+PY
   )"
 fi
 
@@ -89,31 +94,44 @@ if [[ -n "$access_token" && -n "$refresh_token" ]]; then
     WHOOP_OBTAINED_AT="$obtained_at" \
     WHOOP_REDIRECT_URI="$redirect_uri" \
     WHOOP_SCOPE="$scope" \
-    node -e '
-      const data = {
-        access_token: process.env.WHOOP_ACCESS_TOKEN,
-        refresh_token: process.env.WHOOP_REFRESH_TOKEN,
-        token_type: "Bearer",
-        expires_in: Number(process.env.WHOOP_EXPIRES_IN || "3600"),
-        obtained_at: Number(process.env.WHOOP_OBTAINED_AT || String(Date.now()))
-      };
-      if (process.env.WHOOP_REDIRECT_URI) data.redirect_uri = process.env.WHOOP_REDIRECT_URI;
-      if (process.env.WHOOP_SCOPE) data.scope = process.env.WHOOP_SCOPE;
-      process.stdout.write(JSON.stringify(data, null, 2) + "\n");
-    '
+    python3 <<'PY'
+import json
+import os
+import time
+
+data = {
+    "access_token": os.environ.get("WHOOP_ACCESS_TOKEN", ""),
+    "refresh_token": os.environ.get("WHOOP_REFRESH_TOKEN", ""),
+    "token_type": "Bearer",
+    "expires_in": int(os.environ.get("WHOOP_EXPIRES_IN", "3600")),
+    "obtained_at": int(os.environ.get("WHOOP_OBTAINED_AT", str(int(time.time() * 1000))))
+}
+if os.environ.get("WHOOP_REDIRECT_URI"):
+    data["redirect_uri"] = os.environ["WHOOP_REDIRECT_URI"]
+if os.environ.get("WHOOP_SCOPE"):
+    data["scope"] = os.environ["WHOOP_SCOPE"]
+
+print(json.dumps(data, indent=2))
+PY
   )"
   cat > "${DEST_WHOOP_DIR}/token.json" <<EOF
 ${token_json}
 EOF
   if [[ -z "$redirect_uri" ]]; then
     # Ensure redirect_uri is absent (rather than forced) when not explicitly known.
-    node -e '
-      const fs = require("fs");
-      const p = process.argv[1];
-      const t = JSON.parse(fs.readFileSync(p, "utf8"));
-      if (!t.redirect_uri) delete t.redirect_uri;
-      fs.writeFileSync(p, JSON.stringify(t, null, 2) + "\n");
-    ' "${DEST_WHOOP_DIR}/token.json"
+    python3 - "${DEST_WHOOP_DIR}/token.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+    token = json.load(f)
+if not token.get("redirect_uri"):
+    token.pop("redirect_uri", None)
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(token, f, indent=2)
+    f.write("\n")
+PY
   fi
   ensure_file_secure "${DEST_WHOOP_DIR}/token.json"
   echo "Wrote ${DEST_WHOOP_DIR}/token.json"

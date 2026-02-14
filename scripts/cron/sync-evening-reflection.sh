@@ -18,29 +18,13 @@ fi
 
 JOBS_FILE_ABS="$(cd "$(dirname "$JOBS_FILE")" && pwd)/$(basename "$JOBS_FILE")"
 
-JOBS_FILE="$JOBS_FILE_ABS" OWNER_NAME="$OWNER_NAME" LOCAL_TZ="$LOCAL_TZ" TELEGRAM_TARGET="$TELEGRAM_TARGET" node <<'EOF'
-const fs = require("fs");
-
-const jobsPath = process.env.JOBS_FILE;
-const ownerName = process.env.OWNER_NAME || "User";
-const localTz = process.env.LOCAL_TZ || "UTC";
-const telegramTarget = process.env.TELEGRAM_TARGET || "";
-const raw = fs.readFileSync(jobsPath, "utf8");
-const doc = JSON.parse(raw);
-
-if (!Array.isArray(doc.jobs)) {
-  doc.jobs = [];
-}
-
-const now = Date.now();
-const jobId = "39b6d8f8-8b6b-46be-96c2-9f64d735a9e2";
-
-const message = `You are Jarvis preparing the daily 18:00 evening reflection.
+read -r -d '' MESSAGE_TEMPLATE <<'EOF' || true
+You are Jarvis preparing the daily 18:00 evening reflection.
 You are executing the "Evening Reflection" task using OpenClaw.
 
-Audience: ${ownerName}.
-Time zone: ${localTz}. Render ALL times in ${localTz}.
-Date anchor: "today" and "tomorrow" in ${localTz}.
+Audience: __OWNER_NAME__.
+Time zone: __LOCAL_TZ__. Render ALL times in __LOCAL_TZ__.
+Date anchor: "today" and "tomorrow" in __LOCAL_TZ__.
 
 Goal:
 Send one end-of-day Telegram summary with:
@@ -94,7 +78,7 @@ Formatting requirements for telegramMessage:
 Delivery rules:
 - You MUST call message tool exactly once:
   - channel: telegram
-  - target: ${telegramTarget}
+  - target: __TELEGRAM_TARGET__
   - text: telegramMessage
 - Do NOT send any second confirmation/follow-up message.
 - Do NOT send any second message.
@@ -110,46 +94,71 @@ Output contract:
 - Never output confirmation phrases like "sent", "delivered", or "successfully sent".
 - Do NOT return delivery confirmations, status summaries, IDs, or meta text inside telegramMessage.
 - Do NOT include lines like "Sending now", "sent successfully", or any operational note.
-- If a source fails, keep the section with a short fallback line and continue.`;
+- If a source fails, keep the section with a short fallback line and continue.
+EOF
 
-const existingIdx = doc.jobs.findIndex((j) => j && j.id === jobId);
-const previous = existingIdx >= 0 ? doc.jobs[existingIdx] : null;
-const createdAtMs = previous?.createdAtMs ?? now;
+MESSAGE="${MESSAGE_TEMPLATE//__OWNER_NAME__/$OWNER_NAME}"
+MESSAGE="${MESSAGE//__LOCAL_TZ__/$LOCAL_TZ}"
+MESSAGE="${MESSAGE//__TELEGRAM_TARGET__/$TELEGRAM_TARGET}"
 
-const job = {
-  id: jobId,
-  name: "Evening Reflection 18:00",
-  description: "Daily 18:00 reflection with completed/pending tasks, reply-needed emails, calendar deltas, and tomorrow highlights.",
-  enabled: true,
-  createdAtMs,
-  updatedAtMs: now,
-  schedule: {
-    kind: "cron",
-    expr: "0 18 * * *",
-    tz: localTz,
-  },
-  sessionTarget: "isolated",
-  wakeMode: "now",
-  payload: {
-    kind: "agentTurn",
-    message,
-    model: "compass/gpt-4o",
-  },
-  delivery: {
-    mode: "none",
-    channel: "last",
-  },
-  state: previous?.state ?? {},
-  agentId: "cron",
-};
+JOBS_FILE="$JOBS_FILE_ABS" LOCAL_TZ="$LOCAL_TZ" MESSAGE="$MESSAGE" python3 <<'PY'
+import json
+import os
+import time
 
-if (existingIdx >= 0) {
-  doc.jobs[existingIdx] = { ...previous, ...job };
-} else {
-  doc.jobs.push(job);
+jobs_path = os.environ["JOBS_FILE"]
+local_tz = os.environ.get("LOCAL_TZ", "UTC")
+message = os.environ["MESSAGE"]
+job_id = "39b6d8f8-8b6b-46be-96c2-9f64d735a9e2"
+
+with open(jobs_path, "r", encoding="utf-8") as f:
+    doc = json.load(f)
+
+if not isinstance(doc.get("jobs"), list):
+    doc["jobs"] = []
+
+now = int(time.time() * 1000)
+existing_idx = next((i for i, j in enumerate(doc["jobs"]) if isinstance(j, dict) and j.get("id") == job_id), -1)
+previous = doc["jobs"][existing_idx] if existing_idx >= 0 else None
+created_at_ms = previous.get("createdAtMs", now) if isinstance(previous, dict) else now
+
+job = {
+    "id": job_id,
+    "name": "Evening Reflection 18:00",
+    "description": "Daily 18:00 reflection with completed/pending tasks, reply-needed emails, calendar deltas, and tomorrow highlights.",
+    "enabled": True,
+    "createdAtMs": created_at_ms,
+    "updatedAtMs": now,
+    "schedule": {
+        "kind": "cron",
+        "expr": "0 18 * * *",
+        "tz": local_tz,
+    },
+    "sessionTarget": "isolated",
+    "wakeMode": "now",
+    "payload": {
+        "kind": "agentTurn",
+        "message": message,
+        "model": "compass/gpt-4o",
+    },
+    "delivery": {
+        "mode": "none",
+        "channel": "last",
+    },
+    "state": previous.get("state", {}) if isinstance(previous, dict) else {},
+    "agentId": "cron",
 }
 
-fs.writeFileSync(jobsPath, JSON.stringify(doc, null, 2) + "\n");
-EOF
+if existing_idx >= 0:
+    merged = dict(previous) if isinstance(previous, dict) else {}
+    merged.update(job)
+    doc["jobs"][existing_idx] = merged
+else:
+    doc["jobs"].append(job)
+
+with open(jobs_path, "w", encoding="utf-8") as f:
+    json.dump(doc, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+PY
 
 echo "Evening reflection cron job synced in: ${JOBS_FILE}"
