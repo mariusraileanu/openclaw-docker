@@ -17,6 +17,7 @@ Commands:
   rotate-token         Rotate gateway auth token
   auth-clippy          Sync clippy auth files
   auth-whoop           Sync whoop auth files
+  auth-sync-all        Sync whoop + clippy auth files
   cron-sync            Sync cron workspace/tooling/templates
 EOF
 }
@@ -53,6 +54,9 @@ case "$cmd" in
     ;;
   auth-whoop)
     exec "${ROOT_DIR}/scripts/auth/sync-whoop.sh" "$@"
+    ;;
+  auth-sync-all)
+    exec "${ROOT_DIR}/scripts/auth/sync-all.sh" "$@"
     ;;
   cron-sync)
     "${ROOT_DIR}/scripts/cron/sync-workspace.sh" "./data/.openclaw/workspace-cron"

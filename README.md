@@ -59,6 +59,14 @@ docker exec -it openclaw clippy login --interactive
 docker exec -it openclaw sh -lc "/home/node/.openclaw/skills/whoop-central/scripts/whoop-central auth"
 ```
 
+Auth sync helper (recommended on servers):
+```bash
+bin/openclawctl auth-sync-all
+```
+Notes:
+- WHOOP can be fully env-driven (`WHOOP_*` in `.env`).
+- Clippy depends on user session files; if missing, `auth-sync-all` warns but still completes WHOOP sync.
+
 Required env keys for day-to-day use:
 - `COMPASS_API_KEY`
 - `TELEGRAM_BOT_TOKEN`
