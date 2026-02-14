@@ -33,6 +33,8 @@ write_files:
 
       cd "$REPO_DIR"
       [[ -f .env ]] || cp .env.example .env
+      chown azureuser:azureuser .env || true
+      chmod 600 .env || true
       [[ -f data/.openclaw/openclaw.json ]] || bin/openclawctl init
 
       cat >/etc/systemd/system/openclaw-compose.service <<'EOF'
