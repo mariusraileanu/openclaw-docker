@@ -83,6 +83,14 @@ PY
 }
 
 ENV_FILE="${4:-.env}"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 "${SCRIPTS_DIR}/check/validate-env.sh" "$ENV_FILE"
 
 mkdir -p ./data/.openclaw/workspace-cron ./data/.openclaw/agents/cron/agent ./data/.openclaw/agents/main/sessions
