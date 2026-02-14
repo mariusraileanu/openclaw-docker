@@ -27,6 +27,7 @@ Usage:
     [--private] \
     [--vnet-name <name>] \
     [--subnet-name <name>] \
+    [--mode auto|create|update|redeploy] \
     [--copy-env]
 
 Options:
@@ -40,6 +41,11 @@ Options:
   --private          Deploy VM with no public IP and no inbound NSG rules
   --vnet-name        VNet name for private mode (default: vnet-openclaw)
   --subnet-name      Subnet name for private mode (default: snet-openclaw)
+  --mode             Deployment mode:
+                     - auto (default): create if missing, update if exists
+                     - create: fail if VM already exists
+                     - update: fail if VM does not exist
+                     - redeploy: delete existing VM then create it again
   --copy-env         Copy local .env to VM and run build+provision automatically
   -h, --help         Show this help
 EOF
@@ -58,6 +64,7 @@ VNET_NAME="${AZURE_VNET_NAME:-vnet-openclaw}"
 SUBNET_NAME="${AZURE_SUBNET_NAME:-snet-openclaw}"
 VNET_CIDR="${AZURE_VNET_CIDR:-10.40.0.0/16}"
 SUBNET_CIDR="${AZURE_SUBNET_CIDR:-10.40.1.0/24}"
+DEPLOY_MODE="${AZURE_DEPLOY_MODE:-auto}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -70,6 +77,7 @@ while [[ $# -gt 0 ]]; do
     --private) PRIVATE_MODE="1"; shift ;;
     --vnet-name) VNET_NAME="${2:-}"; shift 2 ;;
     --subnet-name) SUBNET_NAME="${2:-}"; shift 2 ;;
+    --mode) DEPLOY_MODE="${2:-}"; shift 2 ;;
     --copy-env) COPY_ENV="1"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -101,25 +109,51 @@ if [[ "$PRIVATE_MODE" == "1" && "$COPY_ENV" == "1" ]]; then
   exit 1
 fi
 
+case "$DEPLOY_MODE" in
+  auto|create|update|redeploy) ;;
+  *)
+    echo "Error: invalid --mode '$DEPLOY_MODE' (expected auto|create|update|redeploy)." >&2
+    exit 1
+    ;;
+esac
+
 run_bootstrap_check() {
   local cmd_output
   cmd_output="$(az vm run-command invoke \
     --resource-group "$RESOURCE_GROUP" \
     --name "$VM_NAME" \
     --command-id RunShellScript \
-    --scripts "
+    --scripts "bash -lc '
 set -euo pipefail
 if [[ ! -f /opt/openclaw-docker/README.md ]]; then
-  sudo REPO_URL='${REPO_URL}' /usr/local/bin/bootstrap-openclaw.sh
+  sudo REPO_URL=\"${REPO_URL}\" /usr/local/bin/bootstrap-openclaw.sh
 fi
 if [[ ! -f /opt/openclaw-docker/README.md ]]; then
-  echo 'bootstrap_failed: /opt/openclaw-docker/README.md missing' >&2
+  echo \"bootstrap_failed: /opt/openclaw-docker/README.md missing\" >&2
   exit 1
 fi
 echo bootstrap_ok
-" \
+'" \
     --query "value[0].message" -o tsv)"
   echo "$cmd_output" >/dev/null
+}
+
+run_update_only() {
+  echo "Updating existing VM bootstrap/repo..."
+  az vm run-command invoke \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$VM_NAME" \
+    --command-id RunShellScript \
+    --scripts "bash -lc '
+set -euo pipefail
+sudo REPO_URL=\"${REPO_URL}\" /usr/local/bin/bootstrap-openclaw.sh
+sudo chown -R ${ADMIN_USER}:${ADMIN_USER} /opt/openclaw-docker
+cd /opt/openclaw-docker
+git rev-parse --short HEAD
+'" \
+    --output none
+
+  echo "Update complete."
 }
 
 CLOUD_INIT_TEMPLATE="infra/azure/cloud-init.yaml"
@@ -146,6 +180,99 @@ PY
 
 echo "Creating resource group: $RESOURCE_GROUP ($LOCATION)"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION" >/dev/null
+
+if az vm show --resource-group "$RESOURCE_GROUP" --name "$VM_NAME" >/dev/null 2>&1; then
+  VM_EXISTS="1"
+else
+  VM_EXISTS="0"
+fi
+
+if [[ "$DEPLOY_MODE" == "create" && "$VM_EXISTS" == "1" ]]; then
+  echo "Error: VM '$VM_NAME' already exists and --mode=create was requested." >&2
+  exit 1
+fi
+
+if [[ "$DEPLOY_MODE" == "update" && "$VM_EXISTS" == "0" ]]; then
+  echo "Error: VM '$VM_NAME' does not exist and --mode=update was requested." >&2
+  exit 1
+fi
+
+if [[ "$DEPLOY_MODE" == "redeploy" && "$VM_EXISTS" == "1" ]]; then
+  echo "Redeploy mode: deleting existing VM '$VM_NAME'..."
+  az vm delete --resource-group "$RESOURCE_GROUP" --name "$VM_NAME" --yes --no-wait false
+  VM_EXISTS="0"
+fi
+
+if [[ "$DEPLOY_MODE" == "auto" && "$VM_EXISTS" == "1" ]]; then
+  echo "VM '$VM_NAME' already exists; switching to update flow (mode=auto)."
+  DEPLOY_MODE="update"
+fi
+
+if [[ "$DEPLOY_MODE" == "update" ]]; then
+  run_update_only
+  echo "Verifying bootstrap on VM..."
+  run_bootstrap_check
+  echo "Bootstrap verified: /opt/openclaw-docker populated."
+
+  if [[ "$PRIVATE_MODE" == "0" ]]; then
+    PUBLIC_IP="$(az vm show -d -g "$RESOURCE_GROUP" -n "$VM_NAME" --query publicIps -o tsv)"
+  fi
+
+  if [[ "$COPY_ENV" == "1" ]]; then
+    if [[ ! -f ".env" ]]; then
+      echo "Error: --copy-env requested but local .env not found." >&2
+      exit 1
+    fi
+
+    echo "Waiting for SSH..."
+    for _ in $(seq 1 40); do
+      if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${ADMIN_USER}@${PUBLIC_IP}" "echo ok" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 5
+    done
+
+    echo "Copying .env and running remote build+provision..."
+    scp -o StrictHostKeyChecking=no .env "${ADMIN_USER}@${PUBLIC_IP}:/tmp/openclaw.env"
+    ssh -o StrictHostKeyChecking=no "${ADMIN_USER}@${PUBLIC_IP}" bash -lc "'
+      set -euo pipefail
+      sudo mv /tmp/openclaw.env /opt/openclaw-docker/.env
+      sudo chown ${ADMIN_USER}:${ADMIN_USER} /opt/openclaw-docker/.env
+      chmod 600 /opt/openclaw-docker/.env
+      cd /opt/openclaw-docker
+      docker compose build
+      OPENCLAW_ALLOW_INSECURE_BYPASS=1 OPENCLAW_SKIP_AUTH_CHECKS=clippy,whoop bin/openclawctl provision
+    '"
+  fi
+
+  cat <<EOF
+Update complete.
+
+Next steps:
+EOF
+
+  if [[ "$PRIVATE_MODE" == "1" ]]; then
+    cat <<EOF
+1) Access via Azure Bastion / VPN / jumpbox into VNet ${VNET_NAME}.
+2) On VM, run as needed:
+   cd /opt/openclaw-docker
+   git pull --ff-only
+   docker compose build
+   bin/openclawctl provision
+EOF
+  else
+    cat <<EOF
+1) SSH into VM:
+   ssh ${ADMIN_USER}@${PUBLIC_IP}
+2) On VM, run as needed:
+   cd /opt/openclaw-docker
+   git pull --ff-only
+   docker compose build
+   bin/openclawctl provision
+EOF
+  fi
+  exit 0
+fi
 
 if [[ "$PRIVATE_MODE" == "1" ]]; then
   echo "Private mode enabled: creating VNet/Subnet and VM without public IP."

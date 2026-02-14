@@ -128,6 +128,11 @@ Notes:
 - `--copy-env` is intentionally blocked in `--private` mode.
 - Use Bastion/VPN/jumpbox for VM access in private mode.
 - Set `AZURE_REPO_URL` in `.env.azure` to your own public/private repo URL.
+- Deploy modes:
+  - `--mode auto` (default): create if missing, update if existing
+  - `--mode create`: create only, fail if VM exists
+  - `--mode update`: update existing VM (pull/bootstrap)
+  - `--mode redeploy`: delete then recreate VM
 
 To also copy local `.env` and run remote build+provision:
 ```bash
@@ -136,6 +141,14 @@ infra/azure/deploy-azure.sh \
   --vm-name <vm-name> \
   --location uaenorth \
   --copy-env
+```
+
+Update existing VM after pushing repo changes:
+```bash
+infra/azure/deploy-azure.sh \
+  --resource-group <rg> \
+  --vm-name <vm-name> \
+  --mode update
 ```
 
 Persistence:
