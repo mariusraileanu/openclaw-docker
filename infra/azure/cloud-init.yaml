@@ -9,6 +9,15 @@ packages:
   - jq
 
 write_files:
+  - path: /etc/ssh/sshd_config.d/99-openclaw-hardening.conf
+    permissions: "0644"
+    owner: root:root
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
   - path: /usr/local/bin/bootstrap-openclaw.sh
     permissions: "0755"
     owner: root:root
@@ -67,5 +76,6 @@ write_files:
 
 runcmd:
   - [ bash, -lc, "/usr/local/bin/bootstrap-openclaw.sh" ]
+  - [ bash, -lc, "systemctl restart ssh || systemctl restart sshd || true" ]
 
 final_message: "OpenClaw cloud-init bootstrap finished. Configure /opt/openclaw-docker/.env then run build + provision."

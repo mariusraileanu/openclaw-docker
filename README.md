@@ -110,6 +110,10 @@ infra/azure/deploy-azure.sh \
   --location uaenorth
 ```
 
+Security defaults in Azure deploy:
+- SSH key auth only (`--authentication-type ssh`)
+- Password login disabled via cloud-init (`PasswordAuthentication no`)
+
 The script auto-loads `.env.azure` if present, and CLI flags override file values.
 
 Private mode (no public IP, no inbound NSG rules):

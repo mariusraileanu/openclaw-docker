@@ -163,6 +163,7 @@ if [[ "$PRIVATE_MODE" == "1" ]]; then
     --image Ubuntu2204 \
     --size "$VM_SIZE" \
     --admin-username "$ADMIN_USER" \
+    --authentication-type ssh \
     --generate-ssh-keys \
     --custom-data "$TMP_CLOUD_INIT" \
     --vnet-name "$VNET_NAME" \
@@ -182,6 +183,7 @@ else
     --image Ubuntu2204 \
     --size "$VM_SIZE" \
     --admin-username "$ADMIN_USER" \
+    --authentication-type ssh \
     --generate-ssh-keys \
     --custom-data "$TMP_CLOUD_INIT" \
     --public-ip-sku Standard \
