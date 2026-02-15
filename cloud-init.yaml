@@ -41,10 +41,9 @@ write_files:
       fi
 
       cd "$REPO_DIR"
-      [[ -f .env ]] || cp .env.example .env
+      [[ -f .env ]] || cp .env_example .env
       chown azureuser:azureuser .env || true
       chmod 600 .env || true
-      [[ -f data/.openclaw/openclaw.json ]] || bin/openclawctl init
       mkdir -p data/.openclaw data/workspace data/clippy data/whoop
       chown -R azureuser:azureuser data || true
       chmod 700 data data/.openclaw data/workspace data/clippy data/whoop || true
@@ -75,11 +74,12 @@ write_files:
       echo "Bootstrap complete."
       echo "Next steps:"
       echo "1) Edit $REPO_DIR/.env with real secrets."
-      echo "2) Run: cd $REPO_DIR && docker compose build"
-      echo "3) Run: cd $REPO_DIR && bin/openclawctl provision"
+      echo "2) Run: cd $REPO_DIR && make build"
+      echo "3) Run: cd $REPO_DIR && make up"
+      echo "4) Run: cd $REPO_DIR && make provision"
 
 runcmd:
   - [ bash, -lc, "/usr/local/bin/bootstrap-openclaw.sh" ]
   - [ bash, -lc, "systemctl restart ssh || systemctl restart sshd || true" ]
 
-final_message: "OpenClaw cloud-init bootstrap finished. Configure /opt/openclaw-docker/.env then run build + provision."
+final_message: "OpenClaw cloud-init bootstrap finished. Configure /opt/openclaw-docker/.env then run make build && make up && make provision."
