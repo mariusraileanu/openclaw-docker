@@ -8,7 +8,7 @@
 # =============================================================================
 # Stage 1: Builder - compile dependencies
 # =============================================================================
-FROM node:22-bookworm AS builder
+FROM node:25-bookworm AS builder
 
 ARG ENV_FILE=../config/versions.env
 RUN test -f "$ENV_FILE" || (echo "ERROR: $ENV_FILE not found" && exit 1)
@@ -47,7 +47,7 @@ RUN mkdir -p /home/node/.openclaw/skills \
 # =============================================================================
 # Stage 3: Runtime - minimal production image
 # =============================================================================
-FROM node:22-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 
 ARG ENV_FILE=../config/versions.env
 # shellcheck source=/dev/null
