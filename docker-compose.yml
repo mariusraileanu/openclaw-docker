@@ -8,7 +8,8 @@ services:
     container_name: openclaw
     restart: unless-stopped
     user: "node"
-    network_mode: "bridge"
+    networks:
+      - openclaw-net
     init: true
     ports:
       - "127.0.0.1:18789:18789"
@@ -21,8 +22,6 @@ services:
       - ./data/graph-mcp:/home/node/graph-mcp:rw
     env_file:
       - .env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       OPENCLAW_GATEWAY_AUTH_TOKEN: ${OPENCLAW_GATEWAY_AUTH_TOKEN}
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_AUTH_TOKEN}
@@ -72,3 +71,8 @@ services:
       - "127.0.0.1:18080:8080"
     volumes:
       - ./data/signal:/home/.local/share/signal-cli:rw
+
+networks:
+  openclaw-net:
+    name: openclaw-net
+    driver: bridge
