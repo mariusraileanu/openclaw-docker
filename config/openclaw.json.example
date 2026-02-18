@@ -12,8 +12,8 @@
         "api": "openai-completions",
         "models": [
           {
-            "id": "gpt-4o",
-            "name": "Compass GPT-4o",
+            "id": "gpt-5.1",
+            "name": "Compass GPT-5.1",
             "reasoning": false,
             "input": [
               "text"
@@ -34,14 +34,14 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "compass/gpt-4o"
+        "primary": "compass/gpt-5.1"
       },
       "models": {
         "google/gemini-2.5-flash": {},
         "openai/gpt-5.2": {
           "alias": "gpt"
         },
-        "compass/gpt-4o": {
+        "compass/gpt-5.1": {
           "alias": "compass"
         },
         "openrouter/arcee-ai/trinity-large-preview:free": {
@@ -64,13 +64,13 @@
         "default": true,
         "workspace": "/home/node/workspace",
         "agentDir": "/home/node/.openclaw/agents/main/agent",
-        "model": "compass/gpt-4o"
+        "model": "compass/gpt-5.1"
       },
       {
         "id": "cron",
         "workspace": "/home/node/.openclaw/workspace-cron",
         "agentDir": "/home/node/.openclaw/agents/cron/agent",
-        "model": "compass/gpt-4o"
+        "model": "compass/gpt-5.1"
       }
     ]
   },
